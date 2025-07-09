@@ -1,0 +1,11 @@
+torch
+transformers
+datasets
+scikit-learn
+tqdm
+PyYAML
+wandb
+evaluate
+rouge_score
+accelerate
+sentencepiece
