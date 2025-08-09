@@ -5,3 +5,7 @@ torch
 datasets
 accelerate
 sentencepiece
+sqlalchemy
+alembic
+pytest
+pytest-asyncio

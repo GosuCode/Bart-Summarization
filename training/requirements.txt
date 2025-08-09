@@ -8,4 +8,4 @@ wandb
 evaluate
 rouge_score
 accelerate
-sentencepiece
+sentencepiece   

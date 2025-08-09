@@ -105,14 +105,16 @@ bart-summarization/
 4. **Run the application**
 
    ```bash
-   python summarization_app.py
+   cd app
+   python3 main.py
    ```
 
    > **Note**: If you haven't downloaded the model yet, the app will show an error. Make sure to run the download command in step 3 first.
 
 5. **Access the service**
    - Web Interface: http://localhost:8000
-   - API Endpoint: http://localhost:8000/summarize
+   - API Endpoint: http://localhost:8000/api/v1/summarize
+   - Health Check: http://localhost:8000/health
 
 ### Docker Deployment
 
@@ -193,6 +195,21 @@ print(summary)
 | `text`       | string  | required | Input text to summarize         |
 | `max_length` | integer | 128      | Maximum length of the summary   |
 | `num_beams`  | integer | 4        | Number of beams for beam search |
+
+## 🧪 Testing
+
+Run the test suite:
+
+```bash
+# Install test dependencies
+pip install -r app/requirements.txt
+
+# Run tests
+pytest
+
+# Run tests with coverage
+pytest --cov=app
+```
 
 ## 🎓 Training Custom Models
 

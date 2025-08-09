@@ -4,6 +4,10 @@ import os
 
 # Import routers
 from routers import summarization
+from routes import priority
+
+# Import database
+from database import init_db
 
 # Create FastAPI app instance
 app = FastAPI(
@@ -15,8 +19,14 @@ app = FastAPI(
 # Mount static files
 app.mount("/static", StaticFiles(directory="./static"), name="static")
 
+# Initialize database
+@app.on_event("startup")
+async def startup_event():
+    init_db()
+
 # Include routers
 app.include_router(summarization.router, prefix="/api/v1", tags=["summarization"])
+app.include_router(priority.router, tags=["priority"])
 
 # Root endpoint
 @app.get("/")
