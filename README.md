@@ -5,6 +5,7 @@ A FastAPI-based web service that provides text summarization capabilities using 
 ## 🚀 Features
 
 - **Text Summarization**: Convert long articles into concise summaries
+- **MCQ Generation**: Generate multiple choice questions from text content
 - **Web Interface**: User-friendly web UI for easy interaction
 - **REST API**: Programmatic access via HTTP endpoints
 - **Custom Training**: Train your own models on specific datasets
@@ -195,6 +196,26 @@ print(summary)
 | `text`       | string  | required | Input text to summarize         |
 | `max_length` | integer | 128      | Maximum length of the summary   |
 | `num_beams`  | integer | 4        | Number of beams for beam search |
+
+#### MCQ Generation
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/mcq/generate" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "text": "Your text content here...",
+       "num_questions": 5,
+       "use_bart": false
+     }'
+```
+
+#### MCQ API Parameters
+
+| Parameter       | Type    | Default  | Description                              |
+| --------------- | ------- | -------- | ---------------------------------------- |
+| `text`          | string  | required | Input text to generate questions from    |
+| `num_questions` | integer | 5        | Number of questions to generate (1-20)   |
+| `use_bart`      | boolean | false    | Whether to use BART model (if available) |
 
 ## 🧪 Testing
 

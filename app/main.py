@@ -3,7 +3,7 @@ from fastapi.staticfiles import StaticFiles
 import os
 
 # Import routers
-from routers import summarization
+from routers import summarization, mcq
 from routes import priority
 
 # Import database
@@ -15,7 +15,7 @@ app = FastAPI(
     description="A FastAPI-based web service for text summarization using BART models",
     version="1.0.0"
 )
-
+ 
 # Mount static files
 app.mount("/static", StaticFiles(directory="./static"), name="static")
 
@@ -26,6 +26,7 @@ async def startup_event():
 
 # Include routers
 app.include_router(summarization.router, prefix="/api/v1", tags=["summarization"])
+app.include_router(mcq.router, prefix="/api/v1/mcq", tags=["mcq"])
 app.include_router(priority.router, tags=["priority"])
 
 # Root endpoint
