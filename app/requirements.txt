@@ -9,3 +9,5 @@ sqlalchemy
 alembic
 pytest
 pytest-asyncio
+python-dotenv
+psycopg2-binary

@@ -9,8 +9,9 @@ class Question(Base):
     topic = Column(String, nullable=False, index=True)
     marks = Column(Float, nullable=False)
     year = Column(Integer, nullable=False, index=True)
+    subject_id = Column(Integer, nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     def __repr__(self):
-        return f"<Question(id={self.id}, topic='{self.topic}', marks={self.marks}, year={self.year})>"
+        return f"<Question(id={self.id}, topic='{self.topic}', marks={self.marks}, year={self.year}, subject_id={self.subject_id})>"
