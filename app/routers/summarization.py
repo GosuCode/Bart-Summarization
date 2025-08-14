@@ -5,26 +5,21 @@ from transformers import BartForConditionalGeneration, BartTokenizerFast
 import torch
 import os
 
-# Router instance
 router = APIRouter()
 
-# Model setup
 enabled_device = "cuda" if torch.cuda.is_available() else "cpu"
 MODEL_DIR = os.getenv("MODEL_DIR", "./model")
 DEVICE = os.getenv("DEVICE", enabled_device)
 
-# Load model and tokenizer
 tokenizer = BartTokenizerFast.from_pretrained(MODEL_DIR)
 model = BartForConditionalGeneration.from_pretrained(MODEL_DIR).to(DEVICE)
 model.eval()
 
-# Pydantic models
 class SummarizationRequest(BaseModel):
     text: str
     max_length: int = 128
     num_beams: int = 4
 
-# Routes
 @router.get("/", response_class=HTMLResponse)
 async def read_root():
     """Serve the main HTML interface"""

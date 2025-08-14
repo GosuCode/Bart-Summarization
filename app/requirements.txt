@@ -11,3 +11,6 @@ pytest
 pytest-asyncio
 python-dotenv
 psycopg2-binary
+python-multipart
+PyPDF2
+python-docx

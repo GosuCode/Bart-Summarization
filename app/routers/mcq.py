@@ -6,15 +6,12 @@ from transformers import BartForConditionalGeneration, BartTokenizerFast
 import torch
 import os
 
-# Router instance
 router = APIRouter()
 
-# Model setup (reuse from summarization)
 enabled_device = "cuda" if torch.cuda.is_available() else "cpu"
 MODEL_DIR = os.getenv("MODEL_DIR", "./model")
 DEVICE = os.getenv("DEVICE", enabled_device)
 
-# Load model and tokenizer
 try:
     tokenizer = BartTokenizerFast.from_pretrained(MODEL_DIR)
     model = BartForConditionalGeneration.from_pretrained(MODEL_DIR).to(DEVICE)
@@ -26,7 +23,6 @@ except Exception as e:
     tokenizer = None
     model = None
 
-# Pydantic models
 class MCQRequest(BaseModel):
     text: str
     num_questions: int = 5
@@ -38,7 +34,6 @@ class MCQResponse(BaseModel):
     text_length: int
     model_used: str
 
-# Routes
 @router.post("/generate", response_class=JSONResponse)
 async def generate_mcq(req: MCQRequest):
     """Generate multiple choice questions from text"""
