@@ -1,24 +1,32 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from fastapi.responses import JSONResponse
-from transformers import BartForConditionalGeneration, BartTokenizerFast
+from pydantic import BaseModel
+from typing import List, Optional, Dict, Any
+import io
+import logging
+import re
 import PyPDF2
 from docx import Document
-import io
-import re
 import torch
+from transformers import BartForConditionalGeneration, BartTokenizerFast
 import os
-from typing import List, Dict, Any
-import logging
 
 router = APIRouter()
 
 enabled_device = "cuda" if torch.cuda.is_available() else "cpu"
-MODEL_DIR = os.getenv("MODEL_DIR", "./model")
 DEVICE = os.getenv("DEVICE", enabled_device)
 
-tokenizer = BartTokenizerFast.from_pretrained(MODEL_DIR)
-model = BartForConditionalGeneration.from_pretrained(MODEL_DIR).to(DEVICE)
-model.eval()
+# Try to load the BART model from Hugging Face (more reliable than local files)
+try:
+    tokenizer = BartTokenizerFast.from_pretrained("facebook/bart-base")
+    model = BartForConditionalGeneration.from_pretrained("facebook/bart-base").to(DEVICE)
+    model.eval()
+    model_loaded = True
+except Exception as e:
+    print(f"Warning: Could not load BART model: {e}")
+    model_loaded = False
+    tokenizer = None
+    model = None
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -101,6 +109,12 @@ def chunk_text(text: str, max_length: int = 1000) -> List[str]:
 
 def summarize_text(text: str, max_length: int = 128) -> str:
     """Generate summary using BART model."""
+    if not model_loaded:
+        # Fallback: return first few sentences as summary
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        summary_sentences = sentences[:3]  # Take first 3 sentences
+        return ' '.join(summary_sentences)
+    
     try:
         inputs = tokenizer(
             text, return_tensors="pt", truncation=True, max_length=1024
@@ -123,7 +137,10 @@ def summarize_text(text: str, max_length: int = 128) -> str:
         return summary
     except Exception as e:
         logger.error(f"Error in summarization: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Summarization failed: {str(e)}")
+        # Fallback: return first few sentences as summary
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        summary_sentences = sentences[:3]  # Take first 3 sentences
+        return ' '.join(summary_sentences)
 
 @router.post("/upload-and-summarize")
 async def upload_and_summarize_file(

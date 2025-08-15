@@ -1,9 +1,9 @@
 fastapi
 uvicorn[standard]
-transformers
-torch
+transformers==4.35.2
+torch==2.1.1
 datasets
-accelerate
+accelerate==0.24.1
 sentencepiece
 sqlalchemy
 alembic
@@ -14,3 +14,7 @@ psycopg2-binary
 python-multipart
 PyPDF2
 python-docx
+spacy
+sentence-transformers
+nltk
+numpy

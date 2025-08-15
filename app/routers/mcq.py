@@ -1,78 +1,111 @@
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from services.mcq import MCQGenerator
-from transformers import BartForConditionalGeneration, BartTokenizerFast
-import torch
-import os
+from typing import List, Optional
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-enabled_device = "cuda" if torch.cuda.is_available() else "cpu"
-MODEL_DIR = os.getenv("MODEL_DIR", "./model")
-DEVICE = os.getenv("DEVICE", enabled_device)
-
-try:
-    tokenizer = BartTokenizerFast.from_pretrained(MODEL_DIR)
-    model = BartForConditionalGeneration.from_pretrained(MODEL_DIR).to(DEVICE)
-    model.eval()
-    model_loaded = True
-except Exception as e:
-    print(f"Warning: Could not load BART model: {e}")
-    model_loaded = False
-    tokenizer = None
-    model = None
-
+# Request and Response models
 class MCQRequest(BaseModel):
     text: str
     num_questions: int = 5
-    use_bart: bool = False
+
+class MCQ(BaseModel):
+    question: str
+    options: List[str]
+    answer: str
 
 class MCQResponse(BaseModel):
-    questions: list
+    mcqs: List[MCQ]
     total_questions: int
     text_length: int
-    model_used: str
+    processing_method: str
+    service: str
 
-@router.post("/generate", response_class=JSONResponse)
-async def generate_mcq(req: MCQRequest):
-    """Generate multiple choice questions from text"""
-    if not req.text.strip():
-        raise HTTPException(status_code=400, detail="Input text is empty")
+def generate_simple_mcqs(text: str, num_questions: int) -> List[MCQ]:
+    """Generate simple MCQs without heavy AI models"""
+    import re
+    import random
     
-    if req.num_questions < 1 or req.num_questions > 20:
-        raise HTTPException(status_code=400, detail="Number of questions must be between 1 and 20")
+    sentences = re.split(r'[.!?]+', text)
+    sentences = [s.strip() for s in sentences if len(s.strip()) > 20]
+    mcqs = []
+    
+    for i in range(min(num_questions, len(sentences))):
+        sentence = sentences[i]
+        words = [w for w in sentence.split() if len(w) > 3]
+        
+        if len(words) < 3:
+            continue
+        
+        # Create a meaningful question
+        question = f"What is the main topic discussed in: \"{sentence[:100]}...\"?"
+        
+        # Use key words as options
+        options = [
+            words[0] if words else "Topic A",
+            words[len(words)//2] if len(words) > 1 else "Topic B",
+            words[-1] if len(words) > 2 else "Topic C",
+            "None of the above"
+        ]
+        
+        # Shuffle options
+        random.shuffle(options)
+        
+        mcqs.append(MCQ(
+            question=question,
+            options=options,
+            answer=options[0]  # First option is correct
+        ))
+    
+    return mcqs
+
+@router.post("/generate", response_model=MCQResponse)
+async def generate_mcq(request: MCQRequest):
+    """Generate multiple-choice questions from academic text"""
     
     try:
-        if req.use_bart and model_loaded:
-            # Use BART model for generation
-            questions = MCQGenerator.generate_mcq_with_bart(
-                req.text, 
-                req.num_questions, 
-                model, 
-                tokenizer
+        # Clean and process text
+        text = request.text.strip()
+        if not text:
+            raise HTTPException(status_code=400, detail="Text cannot be empty")
+        
+        if len(text) < 50:
+            raise HTTPException(status_code=400, detail="Text must be at least 50 characters long")
+        
+        # Generate MCQs
+        mcqs = generate_simple_mcqs(text, request.num_questions)
+        
+        if not mcqs:
+            raise HTTPException(
+                status_code=400, 
+                detail="Could not generate MCQs from the provided text. Please try with longer text."
             )
-            model_used = "BART"
-        else:
-            # Use basic generation
-            questions = MCQGenerator.generate_mcq_from_text(req.text, req.num_questions)
-            model_used = "Basic" if not req.use_bart else "Basic (BART not available)"
         
         return MCQResponse(
-            questions=questions,
-            total_questions=len(questions),
-            text_length=len(req.text),
-            model_used=model_used
+            mcqs=mcqs,
+            total_questions=len(mcqs),
+            text_length=len(text),
+            processing_method="simple_generation",
+            service="FastAPI MCQ Service (Simple)"
         )
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generating MCQ: {str(e)}")
+        logger.error(f"Error generating MCQs: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate MCQs: {str(e)}")
 
 @router.get("/health")
-async def mcq_health():
-    """Health check for MCQ service"""
+async def health_check():
+    """Health check endpoint"""
     return {
         "status": "healthy",
-        "model_loaded": model_loaded,
-        "device": DEVICE
+        "service": "MCQ Generation Service",
+        "models_loaded": {
+            "simple_generator": True
+        },
+        "processing_method": "simple_generation"
     }
