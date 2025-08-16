@@ -1,33 +1,14 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from pydantic import BaseModel
-from transformers import BartForConditionalGeneration, BartTokenizerFast
-import torch
-import os
 import logging
+from services.model_manager import model_manager
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-enabled_device = "cuda" if torch.cuda.is_available() else "cpu"
-DEVICE = os.getenv("DEVICE", enabled_device)
-
-# Load BART model from Hugging Face instead of local directory
-try:
-    logger.info("🔄 Loading BART model from Hugging Face...")
-    tokenizer = BartTokenizerFast.from_pretrained("sshleifer/distilbart-cnn-12-6")
-    model = BartForConditionalGeneration.from_pretrained("sshleifer/distilbart-cnn-12-6").to(DEVICE)
-    model.eval()
-    model_loaded = True
-    logger.info(f"✅ BART model: WORKING on {DEVICE}")
-except Exception as e:
-    logger.error(f"❌ BART model: FAILED to load - {e}")
-    model_loaded = False
-    tokenizer = None
-    model = None
 
 class SummarizationRequest(BaseModel):
     text: str
@@ -45,13 +26,16 @@ async def summarize(req: SummarizationRequest):
     if not req.text.strip():
         raise HTTPException(status_code=400, detail="Input text is empty")
     
-    if not model_loaded or not tokenizer or not model:
-        raise HTTPException(status_code=503, detail="BART model not available. Please check model configuration.")
-    
     try:
+        # Lazy load models only when needed
+        tokenizer, model = model_manager.get_bart_models()
+        
+        if not tokenizer or not model:
+            raise HTTPException(status_code=503, detail="BART model not available. Please check model configuration.")
+        
         inputs = tokenizer(
             req.text, return_tensors="pt", truncation=True, max_length=1024
-        ).to(DEVICE)
+        )
         
         generated_ids = model.generate(
             **inputs,

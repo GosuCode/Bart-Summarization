@@ -1,36 +1,17 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
-from transformers import BartForConditionalGeneration, BartTokenizerFast
 import PyPDF2
 from docx import Document
 import io
 import re
-import torch
-import os
 from typing import List, Dict, Any
 import logging
+from services.model_manager import model_manager
 
 router = APIRouter()
 
-enabled_device = "cuda" if torch.cuda.is_available() else "cpu"
-DEVICE = os.getenv("DEVICE", enabled_device)
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Load BART model from Hugging Face instead of local directory
-try:
-    logger.info("🔄 Loading BART model from Hugging Face...")
-    tokenizer = BartTokenizerFast.from_pretrained("sshleifer/distilbart-cnn-12-6")
-    model = BartForConditionalGeneration.from_pretrained("sshleifer/distilbart-cnn-12-6").to(DEVICE)
-    model.eval()
-    model_loaded = True
-    logger.info(f"✅ BART model: WORKING on {DEVICE}")
-except Exception as e:
-    logger.error(f"❌ BART model: FAILED to load - {e}")
-    model_loaded = False
-    tokenizer = None
-    model = None
 
 def clean_text(text: str) -> str:
     """
@@ -110,16 +91,19 @@ def chunk_text(text: str, max_length: int = 1000) -> List[str]:
 
 def summarize_text(text: str, max_length: int = 128) -> str:
     """Generate summary using BART model."""
-    if not model_loaded or not tokenizer or not model:
-        # Fallback: return first few sentences as summary
-        sentences = re.split(r'(?<=[.!?])\s+', text)
-        summary = ' '.join(sentences[:3])  # First 3 sentences
-        return summary
-    
     try:
+        # Lazy load models only when needed
+        tokenizer, model = model_manager.get_bart_models()
+        
+        if not tokenizer or not model:
+            # Fallback: return first few sentences as summary
+            sentences = re.split(r'(?<=[.!?])\s+', text)
+            summary = ' '.join(sentences[:3])  # First 3 sentences
+            return summary
+        
         inputs = tokenizer(
             text, return_tensors="pt", truncation=True, max_length=1024
-        ).to(DEVICE)
+        )
         
         generated_ids = model.generate(
             **inputs,

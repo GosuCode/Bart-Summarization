@@ -1,42 +1,30 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from services.mcq import MCQGenerator
-from transformers import BartForConditionalGeneration, BartTokenizerFast
-import torch
-import os
+from services.flashcard_service import MCQGenerator
+import logging
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
-enabled_device = "cuda" if torch.cuda.is_available() else "cpu"
-MODEL_DIR = os.getenv("MODEL_DIR", "./model")
-DEVICE = os.getenv("DEVICE", enabled_device)
-
-try:
-    tokenizer = BartTokenizerFast.from_pretrained(MODEL_DIR)
-    model = BartForConditionalGeneration.from_pretrained(MODEL_DIR).to(DEVICE)
-    model.eval()
-    model_loaded = True
-except Exception as e:
-    print(f"Warning: Could not load BART model: {e}")
-    model_loaded = False
-    tokenizer = None
-    model = None
+# Initialize the new MCQ generator service
+mcq_generator = MCQGenerator()
 
 class MCQRequest(BaseModel):
     text: str
     num_questions: int = 5
-    use_bart: bool = False
 
 class MCQResponse(BaseModel):
-    questions: list
+    mcqs: list
     total_questions: int
     text_length: int
-    model_used: str
+    chunks_processed: int
+    processing_time: float
+    service: str
 
 @router.post("/generate", response_class=JSONResponse)
 async def generate_mcq(req: MCQRequest):
-    """Generate multiple choice questions from text"""
+    """Generate multiple choice questions from text using the new flashcards service"""
     if not req.text.strip():
         raise HTTPException(status_code=400, detail="Input text is empty")
     
@@ -44,28 +32,36 @@ async def generate_mcq(req: MCQRequest):
         raise HTTPException(status_code=400, detail="Number of questions must be between 1 and 20")
     
     try:
-        if req.use_bart and model_loaded:
-            # Use BART model for generation
-            questions = MCQGenerator.generate_mcq_with_bart(
-                req.text, 
-                req.num_questions, 
-                model, 
-                tokenizer
-            )
-            model_used = "BART"
-        else:
-            # Use basic generation
-            questions = MCQGenerator.generate_mcq_from_text(req.text, req.num_questions)
-            model_used = "Basic" if not req.use_bart else "Basic (BART not available)"
+        import time
+        start_time = time.time()
+        
+        # Convert num_questions to questions_per_chunk for the new service
+        # Estimate chunks needed based on text length
+        words = len(req.text.split())
+        questions_per_chunk = max(1, min(req.num_questions, 5))  # Cap at 5 per chunk
+        
+        # Generate MCQs using the new service
+        mcqs = mcq_generator.generate_mcqs(req.text, questions_per_chunk)
+        
+        # Limit to requested number of questions
+        mcqs = mcqs[:req.num_questions]
+        
+        processing_time = time.time() - start_time
+        
+        # Calculate chunks processed
+        chunks_processed = max(1, (words // 400) + (1 if words % 400 > 0 else 0))
         
         return MCQResponse(
-            questions=questions,
-            total_questions=len(questions),
+            mcqs=mcqs,
+            total_questions=len(mcqs),
             text_length=len(req.text),
-            model_used=model_used
+            chunks_processed=chunks_processed,
+            processing_time=round(processing_time, 3),
+            service="Flashcards MCQ Service"
         )
         
     except Exception as e:
+        logger.error(f"Error generating MCQ: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error generating MCQ: {str(e)}")
 
 @router.get("/health")
@@ -73,6 +69,12 @@ async def mcq_health():
     """Health check for MCQ service"""
     return {
         "status": "healthy",
-        "model_loaded": model_loaded,
-        "device": DEVICE
+        "service": "MCQ Service (Flashcards Integration)",
+        "flashcard_service_ready": True,
+        "features": [
+            "Text chunking with overlap",
+            "T5-based question generation",
+            "Smart distractor generation",
+            "Fallback to basic generation"
+        ]
     }
